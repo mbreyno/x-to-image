@@ -1,0 +1,23 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# Proxy /twitter-api/* to the serverless function (production CORS fix)
+[[redirects]]
+  from = "/twitter-api/*"
+  to = "/.netlify/functions/twitter-proxy/:splat"
+  status = 200
+  force = true
+
+# Stock photo proxy (server-side Picsum fetch → base64 data URL, no browser CORS)
+[[redirects]]
+  from = "/photo-api"
+  to = "/.netlify/functions/photo-proxy"
+  status = 200
+  force = true
+
+# SPA fallback — must come last
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
