@@ -42,6 +42,13 @@ const CheckIcon = () => (
   </svg>
 )
 
+// Buffer's brand mark — simplified hourglass shape
+const BufferIcon = ({ size = 18 }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} fill="currentColor">
+    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+  </svg>
+)
+
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
 const GRADIENTS = [
@@ -370,6 +377,8 @@ export default function App() {
   const [isFetching, setIsFetching]       = useState(false)
   const [fetchError, setFetchError]       = useState('')
   const [copied, setCopied]               = useState(false)
+  const [isBuffering, setIsBuffering]     = useState(false)
+  const [bufferStatus, setBufferStatus]   = useState('')
 
   // ── Photo background state ────────────────────────────────────────────────
   const [photoKeywords, setPhotoKeywords]     = useState('')
@@ -483,6 +492,76 @@ export default function App() {
       setIsFetchingPhoto(false)
     }
   }, [photoKeywords, postText, keywordList, keywordIndex])
+
+  const handleBuffer = useCallback(async () => {
+    if (!cardRef.current) return
+    setIsBuffering(true)
+    setBufferStatus('')
+    try {
+      // Step 1: render the card to a PNG blob
+      const dims   = ORIENTATIONS[orientation]
+      const canvas = await html2canvas(cardRef.current, {
+        scale: dims.exportScale, useCORS: true, allowTaint: true,
+        backgroundColor: null, logging: false, imageTimeout: 15000,
+      })
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png', 1.0))
+
+      // Step 2: convert blob → base64 data URL (needed for both upload and clipboard)
+      const base64DataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onloadend = () => resolve(reader.result)
+        reader.onerror   = reject
+        reader.readAsDataURL(blob)
+      })
+
+      // Step 3: try to upload to imgbb so we get a public URL for Buffer's picture= param
+      let pictureUrl = null
+      try {
+        const uploadRes  = await fetch('/upload-api', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageData: base64DataUrl }),
+        })
+        const uploadData = await uploadRes.json()
+        if (uploadData.url) pictureUrl = uploadData.url
+        console.log('[Buffer] Uploaded image →', pictureUrl)
+      } catch (uploadErr) {
+        console.warn('[Buffer] Image upload failed:', uploadErr.message)
+      }
+
+      // Step 4: build Buffer URL — include picture= if we have a hosted URL
+      let bufferUrl = `https://buffer.com/add?text=${encodeURIComponent(postText || '')}`
+      if (pictureUrl) bufferUrl += `&picture=${encodeURIComponent(pictureUrl)}`
+      window.open(bufferUrl, 'buffer-share', 'width=750,height=650,scrollbars=yes,resizable=yes')
+
+      // Step 5: also silently copy to clipboard as a paste-fallback
+      let imageCopied = false
+      try {
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+        imageCopied = true
+      } catch (clipErr) {
+        console.warn('[Buffer] Clipboard write failed:', clipErr.message)
+      }
+
+      // Step 6: status message
+      if (pictureUrl) {
+        setBufferStatus('✓ Image attached to Buffer! If it doesn\'t appear, paste with ⌘V (or Ctrl+V)')
+      } else if (imageCopied) {
+        setBufferStatus('📋 Image copied — paste it into Buffer with ⌘V (or Ctrl+V)')
+      } else {
+        setBufferStatus('⚠️ Please download the image and attach it manually in Buffer')
+      }
+      setTimeout(() => setBufferStatus(''), 8000)
+    } catch (err) {
+      console.error('[Buffer] error:', err.message)
+      window.open(
+        `https://buffer.com/add?text=${encodeURIComponent(postText || '')}`,
+        'buffer-share', 'width=750,height=650,scrollbars=yes,resizable=yes'
+      )
+    } finally {
+      setIsBuffering(false)
+    }
+  }, [postText, orientation])
 
   const handlePhotoUpload = useCallback((e) => {
     const file = e.target.files?.[0]
@@ -756,21 +835,52 @@ export default function App() {
                 </div>
               </SectionCard>
 
-              {/* Download */}
-              <button className="hover-lift" onClick={handleDownload} disabled={isDownloading} style={{
-                width: '100%', padding: '15px 20px', borderRadius: 14, border: 'none',
-                background: isDownloading ? 'linear-gradient(135deg, #1d4ed8, #5b21b6)' : 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
-                color: 'white', fontSize: 15, fontWeight: 600,
-                cursor: isDownloading ? 'not-allowed' : 'pointer', opacity: isDownloading ? 0.8 : 1,
-                fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-                boxShadow: '0 4px 20px rgba(59,130,246,0.25)',
-              }}>
-                {isDownloading ? <SpinnerIcon /> : <DownloadIcon />}
-                {isDownloading ? 'Generating PNG…' : 'Download as PNG'}
-              </button>
-              <p style={{ color: '#374151', fontSize: 12, textAlign: 'center', marginTop: -8 }}>
-                Exports at {orientation === 'square' ? '1080×1080' : orientation === 'portrait' ? '1080×1350' : '1920×1080'} px · Perfect for Instagram
-              </p>
+              {/* Download + Buffer */}
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button className="hover-lift" onClick={handleDownload} disabled={isDownloading} style={{
+                  flex: 1, padding: '15px 20px', borderRadius: 14, border: 'none',
+                  background: isDownloading ? 'linear-gradient(135deg, #1d4ed8, #5b21b6)' : 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
+                  color: 'white', fontSize: 15, fontWeight: 600,
+                  cursor: isDownloading ? 'not-allowed' : 'pointer', opacity: isDownloading ? 0.8 : 1,
+                  fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+                  boxShadow: '0 4px 20px rgba(59,130,246,0.25)',
+                }}>
+                  {isDownloading ? <SpinnerIcon /> : <DownloadIcon />}
+                  {isDownloading ? 'Generating…' : 'Download PNG'}
+                </button>
+
+                <button
+                  className="hover-lift"
+                  onClick={handleBuffer}
+                  disabled={isBuffering}
+                  title="Generate image and open in Buffer to schedule"
+                  style={{
+                    padding: '15px 18px', borderRadius: 14, border: '1px solid #2d3a4f',
+                    background: isBuffering ? '#1a2233' : '#111827',
+                    color: '#e5e7eb', fontSize: 14, fontWeight: 600,
+                    cursor: isBuffering ? 'not-allowed' : 'pointer',
+                    opacity: isBuffering ? 0.7 : 1,
+                    fontFamily: 'inherit',
+                    display: 'flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap',
+                    flexShrink: 0, transition: 'all 0.2s',
+                  }}
+                >
+                  {isBuffering ? <SpinnerIcon /> : <BufferIcon size={17} />}
+                  {isBuffering ? 'Preparing…' : 'Buffer'}
+                </button>
+              </div>
+              {bufferStatus ? (
+                <p style={{
+                  fontSize: 12, textAlign: 'center', marginTop: -8, lineHeight: 1.5,
+                  color: bufferStatus.startsWith('📋') ? '#22c55e' : '#f59e0b',
+                }}>
+                  {bufferStatus}
+                </p>
+              ) : (
+                <p style={{ color: '#374151', fontSize: 12, textAlign: 'center', marginTop: -8 }}>
+                  Exports at {orientation === 'square' ? '1080×1080' : orientation === 'portrait' ? '1080×1350' : '1920×1080'} px · Buffer opens with text pre-filled
+                </p>
+              )}
             </div>
 
             {/* ── RIGHT: Preview ── */}

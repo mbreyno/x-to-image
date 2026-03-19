@@ -102,6 +102,50 @@ async function photoFromOpenverse(query) {
   } catch { return null }
 }
 
+// ── Image upload dev-proxy plugin ────────────────────────────────────────────
+
+function imageUploadDevProxy(imgbbApiKey) {
+  return {
+    name: 'image-upload-dev-proxy',
+    configureServer(server) {
+      server.middlewares.use('/upload-api', async (req, res) => {
+        const sendJson = (statusCode, obj) => {
+          res.statusCode = statusCode
+          res.setHeader('Content-Type', 'application/json')
+          res.setHeader('Access-Control-Allow-Origin', '*')
+          res.end(JSON.stringify(obj))
+        }
+
+        if (!imgbbApiKey) {
+          sendJson(503, { error: 'IMGBB_API_KEY not found in .env' }); return
+        }
+
+        try {
+          const chunks = []
+          for await (const chunk of req) chunks.push(chunk)
+          const { imageData } = JSON.parse(Buffer.concat(chunks).toString())
+          const base64 = imageData.replace(/^data:image\/\w+;base64,/, '')
+
+          const form = new URLSearchParams()
+          form.append('key', imgbbApiKey)
+          form.append('image', base64)
+
+          const upstream = await fetch('https://api.imgbb.com/1/upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: form.toString(),
+          })
+          const data = await upstream.json()
+          if (!data?.data?.url) { sendJson(502, { error: 'No URL returned' }); return }
+          sendJson(200, { url: data.data.url })
+        } catch (err) {
+          sendJson(500, { error: err.message })
+        }
+      })
+    },
+  }
+}
+
 // ── Photo dev-proxy plugin ────────────────────────────────────────────────────
 
 function photoDevProxy(anthropicApiKey) {
@@ -153,15 +197,21 @@ function photoDevProxy(anthropicApiKey) {
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')   // loads .env, .env.local, etc.
   const anthropicApiKey = env.ANTHROPIC_API_KEY || ''
+  const imgbbApiKey     = env.IMGBB_API_KEY || ''
 
   if (anthropicApiKey) {
     console.log('[photo-dev] Claude keyword extraction enabled ✓')
   } else {
     console.log('[photo-dev] No ANTHROPIC_API_KEY found — using heuristic keyword extraction')
   }
+  if (imgbbApiKey) {
+    console.log('[upload-dev] imgbb image upload enabled ✓')
+  } else {
+    console.log('[upload-dev] No IMGBB_API_KEY found — Buffer image attachment will be skipped')
+  }
 
   return {
-    plugins: [react(), photoDevProxy(anthropicApiKey)],
+    plugins: [react(), imageUploadDevProxy(imgbbApiKey), photoDevProxy(anthropicApiKey)],
     server: {
       proxy: {
         '/twitter-api': {

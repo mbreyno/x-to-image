@@ -16,6 +16,13 @@
   status = 200
   force = true
 
+# Image upload proxy (base64 → imgbb → public URL for Buffer attachment)
+[[redirects]]
+  from = "/upload-api"
+  to = "/.netlify/functions/image-upload"
+  status = 200
+  force = true
+
 # SPA fallback — must come last
 [[redirects]]
   from = "/*"
