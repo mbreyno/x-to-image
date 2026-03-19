@@ -49,13 +49,6 @@ const BufferIcon = ({ size = 18 }) => (
   </svg>
 )
 
-const InstagramIcon = ({ size = 18 }) => (
-  <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-    <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
-    <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/>
-    <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>
-  </svg>
-)
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
@@ -387,8 +380,6 @@ export default function App() {
   const [copied, setCopied]               = useState(false)
   const [isBuffering, setIsBuffering]     = useState(false)
   const [bufferStatus, setBufferStatus]   = useState('')
-  const [isPosting, setIsPosting]         = useState(false)
-  const [postStatus, setPostStatus]       = useState('')
 
   // ── Photo background state ────────────────────────────────────────────────
   const [photoKeywords, setPhotoKeywords]     = useState('')
@@ -573,49 +564,6 @@ export default function App() {
       setIsBuffering(false)
     }
   }, [postText, orientation])
-
-  const handleInstagram = useCallback(async () => {
-    if (!cardRef.current) return
-    setIsPosting(true)
-    setPostStatus('')
-    try {
-      // Render at 2× scale as JPEG — good quality, fast upload, meets Instagram minimums
-      const canvas = await html2canvas(cardRef.current, {
-        scale: 2, useCORS: true, allowTaint: true,
-        backgroundColor: null, logging: false, imageTimeout: 15000,
-      })
-      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92))
-      const base64DataUrl = await new Promise((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onloadend = () => resolve(reader.result)
-        reader.onerror   = reject
-        reader.readAsDataURL(blob)
-      })
-
-      const res  = await fetch('/instagram-api', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageData: base64DataUrl, caption: postText || '' }),
-      })
-      const data = await res.json()
-
-      if (!res.ok || data.error) {
-        // Surface setup instructions for the common "not configured" case
-        if (res.status === 503) {
-          setPostStatus(`⚙️ ${data.detail || data.error}`)
-        } else {
-          setPostStatus(`❌ ${data.error}`)
-        }
-      } else {
-        setPostStatus('✅ Posted to Instagram!')
-      }
-    } catch (err) {
-      setPostStatus(`❌ ${err.message}`)
-    } finally {
-      setIsPosting(false)
-      setTimeout(() => setPostStatus(''), 10000)
-    }
-  }, [postText])
 
   const handlePhotoUpload = useCallback((e) => {
     const file = e.target.files?.[0]
@@ -936,40 +884,6 @@ export default function App() {
                 </p>
               )}
 
-              {/* Post to Instagram */}
-              <button
-                className="hover-lift"
-                onClick={handleInstagram}
-                disabled={isPosting}
-                title="Publish directly to Instagram (requires Professional account + API setup)"
-                style={{
-                  width: '100%', padding: '15px 20px', borderRadius: 14, border: 'none',
-                  background: isPosting
-                    ? 'linear-gradient(135deg, #7c3aed, #be185d)'
-                    : 'linear-gradient(135deg, #833ab4, #fd1d1d, #fcb045)',
-                  backgroundSize: '200% 200%',
-                  color: 'white', fontSize: 15, fontWeight: 600,
-                  cursor: isPosting ? 'not-allowed' : 'pointer',
-                  opacity: isPosting ? 0.75 : 1,
-                  fontFamily: 'inherit',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-                  boxShadow: '0 4px 20px rgba(131,58,180,0.3)',
-                  transition: 'opacity 0.2s',
-                }}
-              >
-                {isPosting ? <SpinnerIcon /> : <InstagramIcon size={19} />}
-                {isPosting ? 'Publishing…' : 'Post to Instagram'}
-              </button>
-              {postStatus && (
-                <p style={{
-                  fontSize: 12, textAlign: 'center', marginTop: -8, lineHeight: 1.5,
-                  color: postStatus.startsWith('✅') ? '#22c55e'
-                       : postStatus.startsWith('⚙️') ? '#9ca3af'
-                       : '#f87171',
-                }}>
-                  {postStatus}
-                </p>
-              )}
             </div>
 
             {/* ── RIGHT: Preview ── */}

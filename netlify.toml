@@ -23,13 +23,6 @@
   status = 200
   force = true
 
-# Instagram Graph API publish (image → imgbb → Instagram media container → publish)
-[[redirects]]
-  from = "/instagram-api"
-  to = "/.netlify/functions/instagram-publish"
-  status = 200
-  force = true
-
 # SPA fallback — must come last
 [[redirects]]
   from = "/*"
