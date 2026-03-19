@@ -146,6 +146,72 @@ function imageUploadDevProxy(imgbbApiKey) {
   }
 }
 
+// ── Instagram publish dev-proxy plugin ───────────────────────────────────────
+
+function instagramDevProxy(imgbbApiKey, instagramUserId, instagramAccessToken) {
+  return {
+    name: 'instagram-dev-proxy',
+    configureServer(server) {
+      server.middlewares.use('/instagram-api', async (req, res) => {
+        const sendJson = (statusCode, obj) => {
+          res.statusCode = statusCode
+          res.setHeader('Content-Type', 'application/json')
+          res.setHeader('Access-Control-Allow-Origin', '*')
+          res.end(JSON.stringify(obj))
+        }
+
+        if (!instagramUserId || !instagramAccessToken) {
+          sendJson(503, {
+            error: 'Instagram not configured',
+            detail: 'Add INSTAGRAM_USER_ID and INSTAGRAM_ACCESS_TOKEN to your .env file.',
+          }); return
+        }
+        if (!imgbbApiKey) {
+          sendJson(503, { error: 'IMGBB_API_KEY not set in .env' }); return
+        }
+
+        try {
+          const chunks = []
+          for await (const chunk of req) chunks.push(chunk)
+          const { imageData, caption } = JSON.parse(Buffer.concat(chunks).toString())
+
+          // Upload to imgbb
+          const base64 = imageData.replace(/^data:image\/\w+;base64,/, '')
+          const form = new URLSearchParams()
+          form.append('key', imgbbApiKey)
+          form.append('image', base64)
+          const imgbbRes  = await fetch('https://api.imgbb.com/1/upload', {
+            method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: form.toString(),
+          })
+          const imgbbData = await imgbbRes.json()
+          const imageUrl  = imgbbData?.data?.url
+          if (!imageUrl) { sendJson(502, { error: 'imgbb upload failed' }); return }
+
+          // Create media container
+          const containerRes  = await fetch(`https://graph.facebook.com/v21.0/${instagramUserId}/media`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image_url: imageUrl, caption: (caption || '').slice(0, 2200), access_token: instagramAccessToken }),
+          })
+          const containerData = await containerRes.json()
+          if (containerData.error) { sendJson(400, { error: containerData.error.message }); return }
+
+          // Publish
+          const publishRes  = await fetch(`https://graph.facebook.com/v21.0/${instagramUserId}/media_publish`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ creation_id: containerData.id, access_token: instagramAccessToken }),
+          })
+          const publishData = await publishRes.json()
+          if (publishData.error) { sendJson(400, { error: publishData.error.message }); return }
+
+          sendJson(200, { success: true, mediaId: publishData.id })
+        } catch (err) {
+          sendJson(500, { error: err.message })
+        }
+      })
+    },
+  }
+}
+
 // ── Photo dev-proxy plugin ────────────────────────────────────────────────────
 
 function photoDevProxy(anthropicApiKey) {
@@ -196,8 +262,10 @@ function photoDevProxy(anthropicApiKey) {
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')   // loads .env, .env.local, etc.
-  const anthropicApiKey = env.ANTHROPIC_API_KEY || ''
-  const imgbbApiKey     = env.IMGBB_API_KEY || ''
+  const anthropicApiKey        = env.ANTHROPIC_API_KEY || ''
+  const imgbbApiKey            = env.IMGBB_API_KEY || ''
+  const instagramUserId        = env.INSTAGRAM_USER_ID || ''
+  const instagramAccessToken   = env.INSTAGRAM_ACCESS_TOKEN || ''
 
   if (anthropicApiKey) {
     console.log('[photo-dev] Claude keyword extraction enabled ✓')
@@ -209,9 +277,14 @@ export default defineConfig(({ mode }) => {
   } else {
     console.log('[upload-dev] No IMGBB_API_KEY found — Buffer image attachment will be skipped')
   }
+  if (instagramUserId && instagramAccessToken) {
+    console.log('[instagram-dev] Instagram publish enabled ✓')
+  } else {
+    console.log('[instagram-dev] No INSTAGRAM_USER_ID / INSTAGRAM_ACCESS_TOKEN — Instagram publish disabled')
+  }
 
   return {
-    plugins: [react(), imageUploadDevProxy(imgbbApiKey), photoDevProxy(anthropicApiKey)],
+    plugins: [react(), imageUploadDevProxy(imgbbApiKey), instagramDevProxy(imgbbApiKey, instagramUserId, instagramAccessToken), photoDevProxy(anthropicApiKey)],
     server: {
       proxy: {
         '/twitter-api': {
