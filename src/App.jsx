@@ -498,15 +498,16 @@ export default function App() {
     setIsBuffering(true)
     setBufferStatus('')
     try {
-      // Step 1: render the card to a PNG blob
-      const dims   = ORIENTATIONS[orientation]
+      // Step 1: render at a lightweight scale for upload/clipboard — Buffer only needs a
+      // preview-sized image, not full Instagram resolution. JPEG is ~10× smaller than PNG.
+      const BUFFER_SCALE = 1.5   // ~630–756 px wide: fast to render, fast to upload
       const canvas = await html2canvas(cardRef.current, {
-        scale: dims.exportScale, useCORS: true, allowTaint: true,
+        scale: BUFFER_SCALE, useCORS: true, allowTaint: true,
         backgroundColor: null, logging: false, imageTimeout: 15000,
       })
-      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png', 1.0))
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.88))
 
-      // Step 2: convert blob → base64 data URL (needed for both upload and clipboard)
+      // Step 2: convert blob → base64 data URL for upload
       const base64DataUrl = await new Promise((resolve, reject) => {
         const reader = new FileReader()
         reader.onloadend = () => resolve(reader.result)
@@ -537,7 +538,7 @@ export default function App() {
       // Step 5: also silently copy to clipboard as a paste-fallback
       let imageCopied = false
       try {
-        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+        await navigator.clipboard.write([new ClipboardItem({ 'image/jpeg': blob })])
         imageCopied = true
       } catch (clipErr) {
         console.warn('[Buffer] Clipboard write failed:', clipErr.message)
