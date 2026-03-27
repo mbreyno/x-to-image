@@ -476,7 +476,7 @@ export default function App() {
         params.set('query', 'abstract')
       }
 
-      const res  = await fetch(`/photo-api?${params}`)
+      const res  = await fetch(`/api/photo-proxy?${params}`)
       const json = await res.json()
       if (!res.ok || json.error) throw new Error(json.error || `HTTP ${res.status}`)
       setPhotoBackground(json.dataUrl)
@@ -519,7 +519,7 @@ export default function App() {
       // Step 3: try to upload to imgbb so we get a public URL for Buffer's picture= param
       let pictureUrl = null
       try {
-        const uploadRes  = await fetch('/upload-api', {
+        const uploadRes  = await fetch('/api/image-upload', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ imageData: base64DataUrl }),

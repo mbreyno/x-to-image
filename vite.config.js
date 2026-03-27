@@ -108,7 +108,7 @@ function imageUploadDevProxy(imgbbApiKey) {
   return {
     name: 'image-upload-dev-proxy',
     configureServer(server) {
-      server.middlewares.use('/upload-api', async (req, res) => {
+      server.middlewares.use('/api/image-upload', async (req, res) => {
         const sendJson = (statusCode, obj) => {
           res.statusCode = statusCode
           res.setHeader('Content-Type', 'application/json')
@@ -152,7 +152,7 @@ function photoDevProxy(anthropicApiKey) {
   return {
     name: 'photo-dev-proxy',
     configureServer(server) {
-      server.middlewares.use('/photo-api', async (req, res) => {
+      server.middlewares.use('/api/photo-proxy', async (req, res) => {
         const urlObj     = new URL(`http://localhost${req.url}`)
         const queryParam = (urlObj.searchParams.get('query') || '').trim()
         const textParam  = (urlObj.searchParams.get('text')  || '').trim()

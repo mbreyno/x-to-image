@@ -3,7 +3,7 @@
 ## What this is
 A web app that converts X (Twitter) posts into styled PNG image cards for sharing on Instagram and other social platforms. Users paste an X post URL, customize the card's appearance, and export it.
 
-**Live URL:** https://x-to-image.vercel.app (update with actual Vercel URL after first deploy)
+**Live URL:** https://www.xtoimage.app
 **GitHub:** https://github.com/mbreyno/x-to-image
 **Deploys:** Automatically via Vercel on every push to `main`
 
