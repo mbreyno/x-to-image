@@ -3,9 +3,9 @@
 ## What this is
 A web app that converts X (Twitter) posts into styled PNG image cards for sharing on Instagram and other social platforms. Users paste an X post URL, customize the card's appearance, and export it.
 
-**Live URL:** https://x-to-image.netlify.app
+**Live URL:** https://x-to-image.vercel.app (update with actual Vercel URL after first deploy)
 **GitHub:** https://github.com/mbreyno/x-to-image
-**Deploys:** Automatically via Netlify on every push to `main`
+**Deploys:** Automatically via Vercel on every push to `main`
 
 ---
 
@@ -13,7 +13,7 @@ A web app that converts X (Twitter) posts into styled PNG image cards for sharin
 - **React 18 + Vite 5** — plain JSX, no TypeScript
 - **Tailwind CSS** — app shell only; inline styles inside the card (required for html2canvas compatibility)
 - **html2canvas** — renders the card DOM to a PNG at Instagram-native resolution
-- **Netlify Functions** — serverless proxies for API calls (avoid CORS, hide keys)
+- **Vercel Functions** — serverless proxies for API calls (avoid CORS, hide keys)
 
 ---
 
@@ -36,17 +36,17 @@ A web app that converts X (Twitter) posts into styled PNG image cards for sharin
 src/
   App.jsx                  — entire frontend (icons, data, components, handlers, render)
 
-netlify/functions/
+api/
   photo-proxy.js           — Openverse photo search + Claude keyword extraction + Picsum fallback
-  image-upload.js          — base64 PNG → imgbb upload → returns public URL (used by Buffer flow)
+  image-upload.js          — base64 image → imgbb upload → returns public URL (used by Buffer flow)
 
 public/
   og-image.svg             — Open Graph preview image (1200×630)
   favicon.svg              — app icon
 
 index.html                 — title tag, meta description, OG + Twitter card meta tags
-netlify.toml               — build config + function redirects (/photo-api, /upload-api)
-vite.config.js             — dev proxies that mirror Netlify functions locally
+vercel.json                — rewrites: /photo-api → /api/photo-proxy, /upload-api → /api/image-upload
+vite.config.js             — dev proxies that mirror Vercel functions locally
 ```
 
 ---
@@ -59,7 +59,7 @@ vite.config.js             — dev proxies that mirror Netlify functions locally
 | `IMGBB_API_KEY` | image-upload.js — hosts images for Buffer's picture= param | Optional (Buffer still works, just no auto-attach) |
 
 **Local:** Add to `.env` (gitignored)
-**Production:** Add in Netlify dashboard → Site settings → Environment variables
+**Production:** Add in Vercel dashboard → Project → Settings → Environment Variables
 
 ---
 
@@ -68,13 +68,13 @@ vite.config.js             — dev proxies that mirror Netlify functions locally
 npm install
 npm run dev        # starts at http://localhost:5173
 ```
-The `vite.config.js` dev proxy plugins mirror the Netlify functions locally, so `/photo-api` and `/upload-api` work the same as in production.
+The `vite.config.js` dev proxy plugins mirror the Vercel functions locally, so `/photo-api` and `/upload-api` work the same as in production.
 
 ## How to deploy
 ```bash
 git add .
 git commit -m "your message"
-git push origin main    # Netlify auto-deploys
+git push origin main    # Vercel auto-deploys
 ```
 
 ---

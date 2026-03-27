@@ -6,7 +6,7 @@
 //   t      – timestamp for cache-busting
 //
 // Keyword extraction strategy (when `query` is blank and `text` is provided):
-//   1. Claude Haiku API — genuinely understands topic context (requires ANTHROPIC_API_KEY env var)
+//   1. Claude Haiku API — understands topic context (requires ANTHROPIC_API_KEY env var)
 //   2. Heuristic fallback — prioritises hashtags → proper nouns → content words
 //
 // Photo sources:
@@ -29,38 +29,28 @@ const STOP_WORDS = new Set([
   'well','really','actually','literally','basically',
 ])
 
-// Returns an array of up to 5 unique keywords, priority-ordered
 function heuristicKeywords(text) {
   if (!text || !text.trim()) return ['abstract']
-
   const hashtags = [...text.matchAll(/#(\w{2,})/g)]
     .map(m => m[1].toLowerCase()).filter(w => !STOP_WORDS.has(w))
-
   const stripped = text.replace(/https?:\/\/\S+/g, ' ').replace(/#\w+/g, ' ')
-
   const properNouns = [...stripped.matchAll(/\b([A-Z][a-z]{2,}|[A-Z]{2,})\b/g)]
     .map(m => m[1].toLowerCase()).filter(w => !STOP_WORDS.has(w) && w.length > 1)
-
   const contentWords = stripped.replace(/[^a-zA-Z\s]/g, ' ').toLowerCase()
     .split(/\s+/).filter(w => w.length > 2 && !STOP_WORDS.has(w))
-
-  const seen = new Set()
-  const result = []
+  const seen = new Set(); const result = []
   for (const w of [...hashtags, ...properNouns, ...contentWords]) {
     if (w && !seen.has(w) && result.length < 5) { seen.add(w); result.push(w) }
   }
   return result.length > 0 ? result : ['abstract']
 }
 
-// Returns an array of 3–5 keywords, or null on failure
 async function claudeKeywords(text) {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return null
-
   try {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), 6000)
-
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -79,7 +69,6 @@ async function claudeKeywords(text) {
       signal: controller.signal,
     })
     clearTimeout(timer)
-
     if (!res.ok) return null
     const data = await res.json()
     const words = (data.content?.[0]?.text?.trim() || '')
@@ -117,22 +106,15 @@ async function photoFromOpenverse(query) {
   try {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), 10000)
-    // No license_type filter — it was cutting results to near-zero
-    const apiUrl = `https://api.openverse.org/v1/images/?q=${encodeURIComponent(query)}&page_size=20`
-    const apiRes = await fetch(apiUrl, {
-      headers: { 'User-Agent': 'x-to-image/1.0', 'Accept': 'application/json' },
-      signal: controller.signal,
-    })
+    const apiRes = await fetch(
+      `https://api.openverse.org/v1/images/?q=${encodeURIComponent(query)}&page_size=20`,
+      { headers: { 'User-Agent': 'x-to-image/1.0', 'Accept': 'application/json' }, signal: controller.signal }
+    )
     clearTimeout(timer)
     if (!apiRes.ok) return null
-
     const data = await apiRes.json()
-    const results = (data.results || []).filter(r => r.url)
-    if (results.length === 0) return null
-
-    // Try up to 3 random picks in case an individual URL is broken
-    const shuffled = results.sort(() => Math.random() - 0.5)
-    for (const pick of shuffled.slice(0, 3)) {
+    const results = (data.results || []).filter(r => r.url).sort(() => Math.random() - 0.5)
+    for (const pick of results.slice(0, 3)) {
       const img = await fetchImageAsBase64(pick.url)
       if (img) return img
     }
@@ -143,54 +125,44 @@ async function photoFromOpenverse(query) {
   }
 }
 
-async function photoFromPicsum(query, t) {
-  const url = `https://picsum.photos/seed/${encodeURIComponent(query + '-' + t)}/1080/1080`
-  return fetchImageAsBase64(url)
-}
+// ── Vercel handler ────────────────────────────────────────────────────────────
 
-// ── Handler ───────────────────────────────────────────────────────────────────
+export default async function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Cache-Control', 'no-store')
 
-export const handler = async (event) => {
-  const params    = event.queryStringParameters || {}
-  const queryParam = (params.query || '').trim()
-  const textParam  = (params.text  || '').trim()
-  const t          = params.t || Date.now()
+  const queryParam = (req.query.query || '').trim()
+  const textParam  = (req.query.text  || '').trim()
+  const t          = req.query.t || Date.now()
 
-  // Determine what to search for
   let query = queryParam
-  let keywordList = null   // only populated when we derive from post text
+  let keywordList = null
 
   if (!query && textParam) {
-    // Try Claude first; fall back to heuristic — both now return arrays
     keywordList = (await claudeKeywords(textParam)) || heuristicKeywords(textParam)
     query = keywordList[0]
     console.log(`[photo-proxy] Keyword list: ${JSON.stringify(keywordList)}`)
   }
   if (!query) query = 'abstract'
 
-  const ok = (img) => ({
-    statusCode: 200,
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-      'Cache-Control': 'no-store',
-    },
-    body: JSON.stringify({
-      dataUrl: `data:${img.contentType};base64,${img.base64}`,
+  const img1 = await photoFromOpenverse(query)
+  if (img1) {
+    return res.status(200).json({
+      dataUrl: `data:${img1.contentType};base64,${img1.base64}`,
       keywords: query,
       ...(keywordList ? { keywordList } : {}),
-    }),
-  })
-
-  const img1 = await photoFromOpenverse(query)
-  if (img1) return ok(img1)
-
-  const img2 = await photoFromPicsum(query, t)
-  if (img2) return ok(img2)
-
-  return {
-    statusCode: 502,
-    headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-    body: JSON.stringify({ error: 'Could not load a photo from any source. Please try again.' }),
+    })
   }
+
+  const url2 = `https://picsum.photos/seed/${encodeURIComponent(query + '-' + t)}/1080/1080`
+  const img2 = await fetchImageAsBase64(url2)
+  if (img2) {
+    return res.status(200).json({
+      dataUrl: `data:${img2.contentType};base64,${img2.base64}`,
+      keywords: query,
+      ...(keywordList ? { keywordList } : {}),
+    })
+  }
+
+  return res.status(502).json({ error: 'Could not load a photo from any source. Please try again.' })
 }
