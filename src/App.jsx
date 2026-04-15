@@ -289,13 +289,15 @@ function XPostCard({ cardRef, postText, authorName, authorHandle, profilePhoto, 
   const innerWidth = dims.w - (pad.px * 2) - 32
   const innerMaxH  = dims.h - (pad.py * 2) - 32
 
-  // Compute the max height for the body text so overflow always cuts at a
-  // complete line boundary (never mid-glyph).
+  // Calculate max visible lines for the body text.
+  // Using -webkit-line-clamp (rather than maxHeight) lets the browser itself
+  // determine line boundaries, which html2canvas then honours exactly —
+  // eliminating the mid-glyph clipping caused by sub-pixel line-height rounding.
   const lineHeightPx = bodyFontSize * 1.65
-  const headerH      = avatarSize + 14                              // avatar height + marginBottom
-  const footerH      = 14 + 12 + Math.ceil(footerFontSize * 1.2)   // marginTop + paddingTop + text row
+  const headerH      = avatarSize + 14                            // avatar + marginBottom
+  const footerH      = 14 + 12 + Math.ceil(footerFontSize * 1.2) // marginTop + paddingTop + text
   const contentH     = innerMaxH - pad.py * 2
-  const bodyMaxH     = Math.floor((contentH - headerH - footerH) / lineHeightPx) * lineHeightPx
+  const maxLines     = Math.max(2, Math.floor((contentH - headerH - footerH) / lineHeightPx))
 
   return (
     <div ref={cardRef} style={{
@@ -340,15 +342,19 @@ function XPostCard({ cardRef, postText, authorName, authorHandle, profilePhoto, 
           <XLogo size={xLogoSize} color={t.text} style={{ opacity: 0.9, flexShrink: 0, marginTop: 2 }} />
         </div>
 
-        {/* Body */}
-        <p style={{
-          color: t.text, fontSize: bodyFontSize, lineHeight: 1.65,
-          whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0,
-          letterSpacing: '-0.01em', flex: 1, overflow: 'hidden',
-          maxHeight: bodyMaxH,
-        }}>
-          {postText || 'Your post text will appear here.\n\nPaste an X post URL above to get started.'}
-        </p>
+        {/* Body — wrapper keeps flex:1 so footer stays pinned; inner <p> clamps at
+             a browser-determined line boundary so the last line is never half-clipped */}
+        <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+          <p style={{
+            color: t.text, fontSize: bodyFontSize, lineHeight: 1.65,
+            whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0,
+            letterSpacing: '-0.01em',
+            display: '-webkit-box', WebkitBoxOrient: 'vertical',
+            WebkitLineClamp: maxLines, overflow: 'hidden',
+          }}>
+            {postText || 'Your post text will appear here.\n\nPaste an X post URL above to get started.'}
+          </p>
+        </div>
 
         {/* Footer */}
         <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${t.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
