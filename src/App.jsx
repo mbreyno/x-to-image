@@ -289,12 +289,13 @@ function XPostCard({ cardRef, postText, authorName, authorHandle, profilePhoto, 
   const innerWidth = dims.w - (pad.px * 2) - 32
   const innerMaxH  = dims.h - (pad.py * 2) - 32
 
-  // One line-height of bottom padding on the body paragraph acts as a safety
-  // buffer: even if the inner card's overflow:hidden boundary falls mid-way
-  // through what would be the next line, the glyph of the last *visible* line
-  // ends at least one lineHeight above that boundary — so it's never clipped.
+  // The footer is position:absolute at the bottom of the inner card.
+  // bodyPadBottom must equal (or exceed) the footer's full visual height so the
+  // body text never bleeds into the footer zone and gets covered by its background.
+  // footerTotalH = paddingTop(12) + borderTop(1) + text row + paddingBottom(pad.py)
   const lineHeightPx  = bodyFontSize * 1.65
-  const bodyPadBottom = Math.ceil(lineHeightPx)
+  const footerTotalH  = 12 + 1 + Math.ceil(footerFontSize * 1.5) + pad.py
+  const bodyPadBottom = footerTotalH
 
   return (
     <div ref={cardRef} style={{
