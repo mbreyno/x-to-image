@@ -280,7 +280,7 @@ function XPostCard({ cardRef, postText, authorName, authorHandle, profilePhoto, 
 
   const nameFontSize   = Math.max(13, Math.round(dims.w * 0.036))
   const handleFontSize = Math.max(11, Math.round(dims.w * 0.030))
-  const bodyFontSize   = Math.max(11, Math.round(dims.w * 0.035 * fontScale))
+  const bodyFontSize   = Math.max(11, Math.round(dims.w * 0.040 * fontScale))
   const footerFontSize = Math.max(10, Math.round(dims.w * 0.027))
   const avatarSize     = Math.max(36, Math.round(dims.w * 0.105))
   const xLogoSize      = Math.max(16, Math.round(dims.w * 0.048))
@@ -289,16 +289,12 @@ function XPostCard({ cardRef, postText, authorName, authorHandle, profilePhoto, 
   const innerWidth = dims.w - (pad.px * 2) - 32
   const innerMaxH  = dims.h - (pad.py * 2) - 32
 
-  // Compute body maxHeight so overflow:hidden clips at a complete line.
-  // Font size uses a 0.035 multiplier (vs the 0.040 a typical tool would use)
-  // to give extra headroom for emoji: html2canvas renders emoji as inline blocks
-  // that can each force an extra line break, so the smaller base size ensures
-  // those extra lines still fit within bodyMaxH without clipping.
-  const lineHeightPx = bodyFontSize * 1.65
-  const headerH      = avatarSize + 14                            // avatar + marginBottom
-  const footerH      = 14 + 12 + Math.ceil(footerFontSize * 1.2) // marginTop + paddingTop + text
-  const contentH     = innerMaxH - pad.py * 2
-  const bodyMaxH     = Math.floor((contentH - headerH - footerH) / lineHeightPx) * lineHeightPx
+  // One line-height of bottom padding on the body paragraph acts as a safety
+  // buffer: even if the inner card's overflow:hidden boundary falls mid-way
+  // through what would be the next line, the glyph of the last *visible* line
+  // ends at least one lineHeight above that boundary — so it's never clipped.
+  const lineHeightPx  = bodyFontSize * 1.65
+  const bodyPadBottom = Math.ceil(lineHeightPx)
 
   return (
     <div ref={cardRef} style={{
@@ -311,13 +307,16 @@ function XPostCard({ cardRef, postText, authorName, authorHandle, profilePhoto, 
         background: 'radial-gradient(ellipse at 30% 20%, rgba(255,255,255,0.07) 0%, transparent 60%), radial-gradient(ellipse at 80% 80%, rgba(0,0,0,0.15) 0%, transparent 50%)',
         pointerEvents: 'none',
       }} />
+      {/* Inner card — block layout (no flex) so html2canvas renders predictably.
+           The footer is absolutely pinned to the bottom; its opaque background
+           covers any text that bleeds into its zone for very long posts. */}
       <div style={{
         background: t.bg, borderRadius: 18, width: innerWidth, maxHeight: innerMaxH,
         overflow: 'hidden', padding: `${pad.py}px ${pad.px}px`, border: `1px solid ${t.border}`,
         boxShadow: theme === 'light'
           ? '0 8px 40px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.08)'
           : '0 8px 40px rgba(0,0,0,0.55), 0 2px 8px rgba(0,0,0,0.3)',
-        position: 'relative', zIndex: 1, boxSizing: 'border-box', display: 'flex', flexDirection: 'column',
+        position: 'relative', zIndex: 1, boxSizing: 'border-box',
       }}>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
@@ -343,18 +342,24 @@ function XPostCard({ cardRef, postText, authorName, authorHandle, profilePhoto, 
           <XLogo size={xLogoSize} color={t.text} style={{ opacity: 0.9, flexShrink: 0, marginTop: 2 }} />
         </div>
 
-        {/* Body */}
+        {/* Body — natural block flow; paddingBottom keeps last glyph clear of
+             the inner-card clip boundary even if html2canvas renders extra lines */}
         <p style={{
           color: t.text, fontSize: bodyFontSize, lineHeight: 1.65,
           whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0,
-          letterSpacing: '-0.01em', flex: 1, overflow: 'hidden',
-          maxHeight: bodyMaxH,
+          letterSpacing: '-0.01em', paddingBottom: bodyPadBottom,
         }}>
           {postText || 'Your post text will appear here.\n\nPaste an X post URL above to get started.'}
         </p>
 
-        {/* Footer */}
-        <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${t.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        {/* Footer — absolute so it's always visible at the bottom of the card;
+             background covers any body text that bleeds into this zone */}
+        <div style={{
+          position: 'absolute', bottom: 0, left: 0, right: 0,
+          padding: `12px ${pad.px}px ${pad.py}px`,
+          background: t.bg, borderTop: `1px solid ${t.border}`,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        }}>
           <span style={{ color: t.sub, fontSize: footerFontSize }}>
             {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
           </span>
