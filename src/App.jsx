@@ -289,6 +289,14 @@ function XPostCard({ cardRef, postText, authorName, authorHandle, profilePhoto, 
   const innerWidth = dims.w - (pad.px * 2) - 32
   const innerMaxH  = dims.h - (pad.py * 2) - 32
 
+  // Compute the max height for the body text so overflow always cuts at a
+  // complete line boundary (never mid-glyph).
+  const lineHeightPx = bodyFontSize * 1.65
+  const headerH      = avatarSize + 14                              // avatar height + marginBottom
+  const footerH      = 14 + 12 + Math.ceil(footerFontSize * 1.2)   // marginTop + paddingTop + text row
+  const contentH     = innerMaxH - pad.py * 2
+  const bodyMaxH     = Math.floor((contentH - headerH - footerH) / lineHeightPx) * lineHeightPx
+
   return (
     <div ref={cardRef} style={{
       width: dims.w, height: dims.h, ...cardBgStyle, borderRadius: 24,
@@ -337,6 +345,7 @@ function XPostCard({ cardRef, postText, authorName, authorHandle, profilePhoto, 
           color: t.text, fontSize: bodyFontSize, lineHeight: 1.65,
           whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0,
           letterSpacing: '-0.01em', flex: 1, overflow: 'hidden',
+          maxHeight: bodyMaxH,
         }}>
           {postText || 'Your post text will appear here.\n\nPaste an X post URL above to get started.'}
         </p>
