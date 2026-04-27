@@ -295,7 +295,7 @@ function XPostCard({ cardRef, postText, authorName, authorHandle, profilePhoto, 
   // footerTotalH = paddingTop(12) + borderTop(1) + text row + paddingBottom(pad.py)
   const lineHeightPx  = bodyFontSize * 1.65
   const footerTotalH  = 12 + 1 + Math.ceil(footerFontSize * 1.5) + pad.py
-  const bodyPadBottom = footerTotalH
+  const bodyPadBottom = footerTotalH + Math.ceil(lineHeightPx)
 
   return (
     <div ref={cardRef} style={{
