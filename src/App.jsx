@@ -80,9 +80,9 @@ const THEMES = {
 }
 
 const CARD_PADDING = {
-  compact:     { px: 20, py: 20, label: 'Compact' },
-  comfortable: { px: 28, py: 24, label: 'Comfortable' },
-  spacious:    { px: 36, py: 32, label: 'Spacious' },
+  compact:     { px: 20, py: 20, label: 'Compact',     fontFactor: 0.78 },
+  comfortable: { px: 28, py: 24, label: 'Comfortable', fontFactor: 1.00 },
+  spacious:    { px: 36, py: 32, label: 'Spacious',    fontFactor: 1.00 },
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -280,7 +280,7 @@ function XPostCard({ cardRef, postText, authorName, authorHandle, profilePhoto, 
 
   const nameFontSize   = Math.max(13, Math.round(dims.w * 0.036))
   const handleFontSize = Math.max(11, Math.round(dims.w * 0.030))
-  const bodyFontSize   = Math.max(11, Math.round(dims.w * 0.040 * fontScale))
+  const bodyFontSize   = Math.max(11, Math.round(dims.w * 0.040 * fontScale * pad.fontFactor))
   const footerFontSize = Math.max(10, Math.round(dims.w * 0.027))
   const avatarSize     = Math.max(36, Math.round(dims.w * 0.105))
   const xLogoSize      = Math.max(16, Math.round(dims.w * 0.048))
