@@ -262,11 +262,14 @@ function Toggle({ checked, onChange, label }) {
 }
 
 // ─── X Post Card ──────────────────────────────────────────────────────────────
+// `scale` multiplies every pixel value so a 2× hidden copy can be rendered for
+// high-resolution export while the preview stays at scale=1 (normal size).
 
-function XPostCard({ cardRef, postText, authorName, authorHandle, profilePhoto, showVerified, theme, orientation, bgStyle, selectedGradient, solidColor, cardPadding, photoBackground }) {
+function XPostCard({ cardRef, postText, authorName, authorHandle, profilePhoto, showVerified, theme, orientation, bgStyle, selectedGradient, solidColor, cardPadding, photoBackground, scale = 1 }) {
   const t    = THEMES[theme]
   const dims = ORIENTATIONS[orientation]
   const pad  = CARD_PADDING[cardPadding]
+  const s    = scale
 
   const cardBgStyle = bgStyle === 'photo' && photoBackground
     ? { backgroundImage: `url(${photoBackground})`, backgroundSize: 'cover', backgroundPosition: 'center' }
@@ -275,31 +278,33 @@ function XPostCard({ cardRef, postText, authorName, authorHandle, profilePhoto, 
   const displayName = authorName || 'Author Name'
   const initials    = displayName.charAt(0).toUpperCase()
 
-  const textLen  = postText ? postText.length : 60
+  const textLen   = postText ? postText.length : 60
   const fontScale = Math.min(1, Math.max(0.62, 1 - (textLen - 100) * 0.0013))
 
-  const nameFontSize   = Math.max(13, Math.round(dims.w * 0.036))
-  const handleFontSize = Math.max(11, Math.round(dims.w * 0.030))
-  const bodyFontSize   = Math.max(11, Math.round(dims.w * 0.040 * fontScale * pad.fontFactor))
-  const footerFontSize = Math.max(10, Math.round(dims.w * 0.027))
-  const avatarSize     = Math.max(36, Math.round(dims.w * 0.105))
-  const xLogoSize      = Math.max(16, Math.round(dims.w * 0.048))
-  const verifiedSize   = Math.max(14, Math.round(dims.w * 0.040))
+  const nameFontSize   = Math.max(13 * s, Math.round(dims.w * s * 0.036))
+  const handleFontSize = Math.max(11 * s, Math.round(dims.w * s * 0.030))
+  const bodyFontSize   = Math.max(11 * s, Math.round(dims.w * s * 0.040 * fontScale * pad.fontFactor))
+  const footerFontSize = Math.max(10 * s, Math.round(dims.w * s * 0.027))
+  const avatarSize     = Math.max(36 * s, Math.round(dims.w * s * 0.105))
+  const xLogoSize      = Math.max(16 * s, Math.round(dims.w * s * 0.048))
+  const verifiedSize   = Math.max(14 * s, Math.round(dims.w * s * 0.040))
 
-  const innerWidth = dims.w - (pad.px * 2) - 32
-  const innerMaxH  = dims.h - (pad.py * 2) - 32
+  const padPx      = pad.px * s
+  const padPy      = pad.py * s
+  const innerWidth = dims.w * s - (padPx * 2) - 32 * s
+  const innerMaxH  = dims.h * s - (padPy * 2) - 32 * s
 
   // The footer is position:absolute at the bottom of the inner card.
   // bodyPadBottom must equal (or exceed) the footer's full visual height so the
   // body text never bleeds into the footer zone and gets covered by its background.
-  // footerTotalH = paddingTop(12) + borderTop(1) + text row + paddingBottom(pad.py)
+  // footerTotalH = paddingTop(12*s) + borderTop(1) + text row + paddingBottom(padPy)
   const lineHeightPx  = bodyFontSize * 1.65
-  const footerTotalH  = 12 + 1 + Math.ceil(footerFontSize * 1.5) + pad.py
+  const footerTotalH  = 12 * s + 1 + Math.ceil(footerFontSize * 1.5) + padPy
   const bodyPadBottom = footerTotalH + Math.ceil(lineHeightPx)
 
   return (
     <div ref={cardRef} style={{
-      width: dims.w, height: dims.h, ...cardBgStyle, borderRadius: 24,
+      width: dims.w * s, height: dims.h * s, ...cardBgStyle, borderRadius: 24 * s,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       position: 'relative', overflow: 'hidden', flexShrink: 0,
     }}>
@@ -312,16 +317,16 @@ function XPostCard({ cardRef, postText, authorName, authorHandle, profilePhoto, 
            The footer is absolutely pinned to the bottom; its opaque background
            covers any text that bleeds into its zone for very long posts. */}
       <div style={{
-        background: t.bg, borderRadius: 18, width: innerWidth, maxHeight: innerMaxH,
-        overflow: 'hidden', padding: `${pad.py}px ${pad.px}px`, border: `1px solid ${t.border}`,
+        background: t.bg, borderRadius: 18 * s, width: innerWidth, maxHeight: innerMaxH,
+        overflow: 'hidden', padding: `${padPy}px ${padPx}px`, border: `1px solid ${t.border}`,
         boxShadow: theme === 'light'
           ? '0 8px 40px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.08)'
           : '0 8px 40px rgba(0,0,0,0.55), 0 2px 8px rgba(0,0,0,0.3)',
         position: 'relative', zIndex: 1, boxSizing: 'border-box',
       }}>
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 * s }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 * s }}>
             {profilePhoto ? (
               <img src={profilePhoto} alt="Avatar" style={{ width: avatarSize, height: avatarSize, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} crossOrigin="anonymous" />
             ) : (
@@ -333,14 +338,14 @@ function XPostCard({ cardRef, postText, authorName, authorHandle, profilePhoto, 
               }}>{initials}</div>
             )}
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'nowrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 * s, flexWrap: 'nowrap' }}>
                 <span style={{ color: t.text, fontWeight: 700, fontSize: nameFontSize, lineHeight: 1.2 }}>{displayName}</span>
                 {showVerified && <VerifiedBadge size={verifiedSize} />}
               </div>
-              <div style={{ color: t.sub, fontSize: handleFontSize, marginTop: 2, lineHeight: 1.2 }}>{handle}</div>
+              <div style={{ color: t.sub, fontSize: handleFontSize, marginTop: 2 * s, lineHeight: 1.2 }}>{handle}</div>
             </div>
           </div>
-          <XLogo size={xLogoSize} color={t.text} style={{ opacity: 0.9, flexShrink: 0, marginTop: 2 }} />
+          <XLogo size={xLogoSize} color={t.text} style={{ opacity: 0.9, flexShrink: 0, marginTop: 2 * s }} />
         </div>
 
         {/* Body — natural block flow; paddingBottom keeps last glyph clear of
@@ -357,16 +362,16 @@ function XPostCard({ cardRef, postText, authorName, authorHandle, profilePhoto, 
              background covers any body text that bleeds into this zone */}
         <div style={{
           position: 'absolute', bottom: 0, left: 0, right: 0,
-          padding: `12px ${pad.px}px ${pad.py}px`,
+          padding: `${12 * s}px ${padPx}px ${padPy}px`,
           background: t.bg, borderTop: `1px solid ${t.border}`,
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
           <span style={{ color: t.sub, fontSize: footerFontSize }}>
             {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
           </span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 * s }}>
             <span style={{ color: t.sub, fontSize: footerFontSize }}>via</span>
-            <XLogo size={footerFontSize + 2} color={t.sub} />
+            <XLogo size={footerFontSize + 2 * s} color={t.sub} />
           </div>
         </div>
       </div>
@@ -409,8 +414,9 @@ export default function App() {
   const [keywordList, setKeywordList]   = useState([])
   const [keywordIndex, setKeywordIndex] = useState(0)
 
-  const cardRef      = useRef(null)
-  const fileInputRef = useRef(null)
+  const cardRef       = useRef(null)
+  const exportCardRef = useRef(null)
+  const fileInputRef  = useRef(null)
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
 
@@ -592,11 +598,13 @@ export default function App() {
   }, [])
 
   const handleDownload = useCallback(async () => {
-    if (!cardRef.current) return
+    if (!exportCardRef.current) return
     setIsDownloading(true)
     try {
+      // Use the hidden 2× card — glyphs are rendered at 2× DOM size before html2canvas
+      // scales them, producing sharper output at 2× the pixel dimensions.
       const dims   = ORIENTATIONS[orientation]
-      const canvas = await html2canvas(cardRef.current, {
+      const canvas = await html2canvas(exportCardRef.current, {
         scale: dims.exportScale, useCORS: true, allowTaint: true,
         backgroundColor: null, logging: false, imageTimeout: 15000,
       })
@@ -919,6 +927,11 @@ export default function App() {
               }}>
                 <div style={{ transform: orientation === 'landscape' ? `scale(${Math.min(1, (window.innerWidth * 0.38) / dims.w)})` : 'scale(1)', transformOrigin: 'center center' }}>
                   <XPostCard cardRef={cardRef} {...cardProps} />
+                </div>
+                {/* Hidden 2× card used for high-res export — rendered off-screen so
+                     html2canvas captures glyphs at 2× DOM size before scaling */}
+                <div style={{ position: 'fixed', left: -99999, top: 0, pointerEvents: 'none', opacity: 0 }}>
+                  <XPostCard cardRef={exportCardRef} {...cardProps} scale={2} />
                 </div>
               </div>
               <div style={{ marginTop: 16, background: '#111827', borderRadius: 12, padding: '14px 18px', border: '1px solid #1f2937', display: 'flex', flexDirection: 'column', gap: 8 }}>
