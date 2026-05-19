@@ -56,6 +56,7 @@ vite.config.js             — dev proxies that mirror Vercel functions locally
 | Variable | Where used | Required? |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | Claude Haiku keyword extraction in photo-proxy | Optional (falls back to heuristic) |
+| `PEXELS_API_KEY` | Pexels photo search in photo-proxy | Required for photo backgrounds |
 | `IMGBB_API_KEY` | image-upload.js — hosts images for Buffer's picture= param | Optional (Buffer still works, just no auto-attach) |
 
 **Local:** Add to `.env` (gitignored)

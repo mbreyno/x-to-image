@@ -81,21 +81,23 @@ async function fetchImageAsBase64(url) {
   } catch { clearTimeout(timer); return null }
 }
 
-async function photoFromOpenverse(query) {
+async function photoFromPexels(query, pexelsApiKey) {
+  if (!pexelsApiKey) return null
   try {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), 10000)
-    // Note: no license_type filter — it was cutting results to near-zero
     const apiRes = await fetch(
-      `https://api.openverse.org/v1/images/?q=${encodeURIComponent(query)}&page_size=20`,
-      { headers: { 'User-Agent': 'x-to-image/1.0', 'Accept': 'application/json' }, signal: controller.signal }
+      `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=15&orientation=square`,
+      { headers: { Authorization: pexelsApiKey }, signal: controller.signal }
     )
     clearTimeout(timer)
     if (!apiRes.ok) return null
     const data = await apiRes.json()
-    const results = (data.results || []).filter(r => r.url).sort(() => Math.random() - 0.5)
-    for (const pick of results.slice(0, 3)) {
-      const img = await fetchImageAsBase64(pick.url)
+    const results = (data.photos || []).filter(p => p.src?.large2x || p.src?.large)
+    results.sort(() => Math.random() - 0.5)
+    for (const pick of results.slice(0, 5)) {
+      const imgUrl = pick.src.large2x || pick.src.large
+      const img = await fetchImageAsBase64(imgUrl)
       if (img) return img
     }
     return null
@@ -148,7 +150,7 @@ function imageUploadDevProxy(imgbbApiKey) {
 
 // ── Photo dev-proxy plugin ────────────────────────────────────────────────────
 
-function photoDevProxy(anthropicApiKey) {
+function photoDevProxy(anthropicApiKey, pexelsApiKey) {
   return {
     name: 'photo-dev-proxy',
     configureServer(server) {
@@ -156,7 +158,6 @@ function photoDevProxy(anthropicApiKey) {
         const urlObj     = new URL(`http://localhost${req.url}`)
         const queryParam = (urlObj.searchParams.get('query') || '').trim()
         const textParam  = (urlObj.searchParams.get('text')  || '').trim()
-        const t          = urlObj.searchParams.get('t') || Date.now()
 
         const sendJson = (statusCode, obj) => {
           res.statusCode = statusCode
@@ -177,14 +178,10 @@ function photoDevProxy(anthropicApiKey) {
 
         const extra = keywordList ? { keywordList } : {}
 
-        const img1 = await photoFromOpenverse(query)
-        if (img1) { sendJson(200, { dataUrl: `data:${img1.contentType};base64,${img1.base64}`, keywords: query, ...extra }); return }
+        const img = await photoFromPexels(query, pexelsApiKey)
+        if (img) { sendJson(200, { dataUrl: `data:${img.contentType};base64,${img.base64}`, keywords: query, ...extra }); return }
 
-        const url2 = `https://picsum.photos/seed/${encodeURIComponent(query + '-' + t)}/1080/1080`
-        const img2 = await fetchImageAsBase64(url2)
-        if (img2) { sendJson(200, { dataUrl: `data:${img2.contentType};base64,${img2.base64}`, keywords: query, ...extra }); return }
-
-        sendJson(502, { error: 'Could not load a photo from any source. Please try again.' })
+        sendJson(502, { error: 'Could not load a photo. Check your PEXELS_API_KEY or try different keywords.' })
       })
     },
   }
@@ -196,12 +193,18 @@ function photoDevProxy(anthropicApiKey) {
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')   // loads .env, .env.local, etc.
-  const anthropicApiKey        = env.ANTHROPIC_API_KEY || ''
-  const imgbbApiKey            = env.IMGBB_API_KEY || ''
+  const anthropicApiKey = env.ANTHROPIC_API_KEY || ''
+  const imgbbApiKey     = env.IMGBB_API_KEY     || ''
+  const pexelsApiKey    = env.PEXELS_API_KEY    || ''
   if (anthropicApiKey) {
     console.log('[photo-dev] Claude keyword extraction enabled ✓')
   } else {
     console.log('[photo-dev] No ANTHROPIC_API_KEY found — using heuristic keyword extraction')
+  }
+  if (pexelsApiKey) {
+    console.log('[photo-dev] Pexels photo search enabled ✓')
+  } else {
+    console.log('[photo-dev] No PEXELS_API_KEY found — photo backgrounds will not work')
   }
   if (imgbbApiKey) {
     console.log('[upload-dev] imgbb image upload enabled ✓')
@@ -209,7 +212,7 @@ export default defineConfig(({ mode }) => {
     console.log('[upload-dev] No IMGBB_API_KEY found — Buffer image attachment will be skipped')
   }
   return {
-    plugins: [react(), imageUploadDevProxy(imgbbApiKey), photoDevProxy(anthropicApiKey)],
+    plugins: [react(), imageUploadDevProxy(imgbbApiKey), photoDevProxy(anthropicApiKey, pexelsApiKey)],
     server: {
       proxy: {
         '/twitter-api': {

@@ -9,9 +9,8 @@
 //   1. Claude Haiku API — understands topic context (requires ANTHROPIC_API_KEY env var)
 //   2. Heuristic fallback — prioritises hashtags → proper nouns → content words
 //
-// Photo sources:
-//   1. Openverse (api.openverse.org) — keyword-searchable Creative Commons images
-//   2. Picsum Photos — beautiful but random, last resort
+// Photo source:
+//   Pexels (api.pexels.com) — high-quality curated stock photos, no attribution required
 
 // ── Keyword extraction ────────────────────────────────────────────────────────
 
@@ -102,25 +101,33 @@ async function fetchImageAsBase64(url) {
   }
 }
 
-async function photoFromOpenverse(query) {
+async function photoFromPexels(query) {
+  const apiKey = process.env.PEXELS_API_KEY
+  if (!apiKey) return null
   try {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), 10000)
     const apiRes = await fetch(
-      `https://api.openverse.org/v1/images/?q=${encodeURIComponent(query)}&page_size=20`,
-      { headers: { 'User-Agent': 'x-to-image/1.0', 'Accept': 'application/json' }, signal: controller.signal }
+      `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=15&orientation=square`,
+      {
+        headers: { Authorization: apiKey },
+        signal: controller.signal,
+      }
     )
     clearTimeout(timer)
     if (!apiRes.ok) return null
     const data = await apiRes.json()
-    const results = (data.results || []).filter(r => r.url).sort(() => Math.random() - 0.5)
-    for (const pick of results.slice(0, 3)) {
-      const img = await fetchImageAsBase64(pick.url)
+    const results = (data.photos || []).filter(p => p.src?.large2x || p.src?.large)
+    // Shuffle so repeated calls with the same keyword yield variety
+    results.sort(() => Math.random() - 0.5)
+    for (const pick of results.slice(0, 5)) {
+      const imgUrl = pick.src.large2x || pick.src.large
+      const img = await fetchImageAsBase64(imgUrl)
       if (img) return img
     }
     return null
   } catch (err) {
-    console.error(`[photo-proxy] Openverse failed: ${err.message}`)
+    console.error(`[photo-proxy] Pexels failed: ${err.message}`)
     return null
   }
 }
@@ -133,7 +140,6 @@ export default async function handler(req, res) {
 
   const queryParam = (req.query.query || '').trim()
   const textParam  = (req.query.text  || '').trim()
-  const t          = req.query.t || Date.now()
 
   let query = queryParam
   let keywordList = null
@@ -145,24 +151,14 @@ export default async function handler(req, res) {
   }
   if (!query) query = 'abstract'
 
-  const img1 = await photoFromOpenverse(query)
-  if (img1) {
+  const img = await photoFromPexels(query)
+  if (img) {
     return res.status(200).json({
-      dataUrl: `data:${img1.contentType};base64,${img1.base64}`,
+      dataUrl: `data:${img.contentType};base64,${img.base64}`,
       keywords: query,
       ...(keywordList ? { keywordList } : {}),
     })
   }
 
-  const url2 = `https://picsum.photos/seed/${encodeURIComponent(query + '-' + t)}/1080/1080`
-  const img2 = await fetchImageAsBase64(url2)
-  if (img2) {
-    return res.status(200).json({
-      dataUrl: `data:${img2.contentType};base64,${img2.base64}`,
-      keywords: query,
-      ...(keywordList ? { keywordList } : {}),
-    })
-  }
-
-  return res.status(502).json({ error: 'Could not load a photo from any source. Please try again.' })
+  return res.status(502).json({ error: 'Could not load a photo. Check your PEXELS_API_KEY or try different keywords.' })
 }
